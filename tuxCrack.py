@@ -3,6 +3,7 @@
 #from __future__ import division
 import crypt
 import sys
+import mpi4py
 
 
 def leeSombra(f):
