@@ -12,7 +12,7 @@ import time
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-
+final = 0
 
 def parteDiccionario(dic):
     ruta = os.path.dirname(sys.argv[2])
@@ -69,14 +69,14 @@ def crackUsuarios(usuario, vdiccionario):
     Funcion encargada de realizar fuerza bruta a un fichero shadow
     con un diccionario
     """
+    final = 0
     print "Iniciando ataque de fuerza bruta..."
     udata = usuario[1].split("$")
     if udata[1] == '6':
-        final = False
         i = 0
         print "  Cifrado -> SHA-512"
         salt = "$" + str(6) + "$" + udata[2] + "$"
-        while i < len(vdiccionario) or final is False:
+        while i < len(vdiccionario) and final == 0:
         # for i in range(len(vdiccionario)):
             #para mostrar el porcentaje de fichero probado
             # escala = (i+1) * 100 / len(vdiccionario)
@@ -88,9 +88,9 @@ def crackUsuarios(usuario, vdiccionario):
                 print rank
                 print "Usuario: " + usuario[0] + "   Contraseña: " \
                     + vdiccionario[i]
-                final = True
-                final = comm.bcast(True, root=0)
-                sys.exit()
+                print "rango ", rank
+                final = comm.bcast(1, root=rank)
+                #sys.exit()
             #print ""
             #print "Contraseña no encontrada :("
             #print
@@ -125,8 +125,6 @@ def main():
         p_dic = "parte_00" + str(rank)
         palabras = leeDic(p_dic)
         crackUsuarios(u, palabras)
-        print final
-
 
 if __name__ == "__main__":
     main()
