@@ -6,22 +6,27 @@ import sys
 from mpi4py import MPI
 import subprocess
 import math
+import os
+import time
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
 
-def parteDiccionario(dic, proc):
+def parteDiccionario(dic):
+    ruta = os.path.dirname(sys.argv[2])
+    parte = " parte_"
+    if ruta != '':
+        parte = " " + ruta + "/parte_"
     comando = 'wc -l ' + dic
     c = subprocess.Popen([comando], shell=True,
         stdout=subprocess.PIPE).communicate()[0]
     lineas = c.split(' ')
-    fragmento = math.ceil(float(lineas[0])/proc)
+    fragmento = math.ceil((float(lineas[0]))/size)+1
     comando_separar = 'split -l ' + str(int(fragmento)) + ' -d -a 3 ' + dic + \
-        ' pruebas/parte_'
+        parte
     separar = subprocess.Popen([comando_separar], shell=True)
-
 
 
 def leeSombra(f):
@@ -43,59 +48,84 @@ def leeDic(dic):
     """
     Lee el diccionario pasado como parámetro
     """
+    ruta = os.path.dirname(sys.argv[2])
+    if ruta != '':
+        dic = ruta + "/" + dic
+    diccionario = open(dic)
     print "Leyendo diccionario...."
     print ""
-    linea = dic.readline()
+    linea = diccionario.readline()
     vdic = []
     while linea != "":
         linea = linea.rstrip("\n")
         vdic.append(linea)
-        linea = dic.readline()
+        linea = diccionario.readline()
+    diccionario.close()
     return vdic
 
 
-def crackUsuarios(vusuarios, vdiccionario):
+def crackUsuarios(usuario, vdiccionario):
     """
     Funcion encargada de realizar fuerza bruta a un fichero shadow
     con un diccionario
     """
     print "Iniciando ataque de fuerza bruta..."
-    for u in vusuarios:
-        udata = u[1].split("$")
-        if udata[1] == '6':
-            print "Usuario -> " + u[0] + "  Cifrado -> SHA-512"
-            salt = "$" + str(6) + "$" + udata[2] + "$"
-            for i in range(len(vdiccionario)):
-                #para mostrar el porcentaje de fichero probado
-                escala = (i+1) * 100 / len(vdiccionario)
-                sys.stdout.write("\r%d%%" % escala)
-                sys.stdout.flush()
-                pcifrada = crypt.crypt(vdiccionario[i], salt)
-                if pcifrada == u[1]:
-                    print ""
-                    print "Usuario: " + u[0] + "   Contraseña: " \
-                        + vdiccionario[i]
-                    sys.exit()
-            print ""
-            print "Contraseña no encontrada :("
-            print
+    udata = usuario[1].split("$")
+    if udata[1] == '6':
+        final = False
+        i = 0
+        print "  Cifrado -> SHA-512"
+        salt = "$" + str(6) + "$" + udata[2] + "$"
+        while i < len(vdiccionario) or final is False:
+        # for i in range(len(vdiccionario)):
+            #para mostrar el porcentaje de fichero probado
+            # escala = (i+1) * 100 / len(vdiccionario)
+            # sys.stdout.write("\r%d%%" % escala)
+            # sys.stdout.flush()
+            pcifrada = crypt.crypt(vdiccionario[i], salt)
+            if pcifrada == usuario[1]:
+                print ""
+                print rank
+                print "Usuario: " + usuario[0] + "   Contraseña: " \
+                    + vdiccionario[i]
+                final = True
+                final = comm.bcast(True, root=0)
+                sys.exit()
+            #print ""
+            #print "Contraseña no encontrada :("
+            #print
+            i += 1
 
 
 def main():
     if len(sys.argv) == 3:
         sombra = open(sys.argv[1])
-        diccionario = open(sys.argv[2])
     else:
         print
         print "Uso python <fichero shadow> <diccionario>"
         print
         sys.exit()
-    p = 5
-    parteDiccionario(sys.argv[2], int(p))
-    #usuarios = leeSombra(sombra)
-    #palabras = leeDic(diccionario)
 
-    #crackUsuarios(usuarios, palabras)
+    if rank == 0:
+    #si somos el primer procesador dividimos los diccionarios
+        parteDiccionario(sys.argv[2])
+        usuarios = leeSombra(sombra)
+        time.sleep(2)
+        for i in range(0, len(usuarios)):
+            print "Usuario -> " + usuarios[i][0]
+            #enviamos el usuario a todos los procesadores
+            for j in range(0, size):
+                comm.send(usuarios[i], dest=j, tag=j)
+            #calcula su parte
+            p_dic = "parte_00" + str(rank)
+            palabras = leeDic(p_dic)
+            crackUsuarios(usuarios[i], palabras)
+    elif rank > 0 and rank < 10:
+        u = comm.recv(source=0, tag=rank)
+        p_dic = "parte_00" + str(rank)
+        palabras = leeDic(p_dic)
+        crackUsuarios(u, palabras)
+        print final
 
 
 if __name__ == "__main__":
