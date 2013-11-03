@@ -3,7 +3,25 @@
 #from __future__ import division
 import crypt
 import sys
-import mpi4py
+from mpi4py import MPI
+import subprocess
+import math
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+
+def parteDiccionario(dic, proc):
+    comando = 'wc -l ' + dic
+    c = subprocess.Popen([comando], shell=True,
+        stdout=subprocess.PIPE).communicate()[0]
+    lineas = c.split(' ')
+    fragmento = math.ceil(float(lineas[0])/proc)
+    comando_separar = 'split -l ' + str(int(fragmento)) + ' -d -a 3 ' + dic + \
+        ' pruebas/parte_'
+    separar = subprocess.Popen([comando_separar], shell=True)
+
 
 
 def leeSombra(f):
@@ -55,7 +73,8 @@ def crackUsuarios(vusuarios, vdiccionario):
                 pcifrada = crypt.crypt(vdiccionario[i], salt)
                 if pcifrada == u[1]:
                     print ""
-                    print "Usuario: " + u[0] + "   Contraseña: " + vdiccionario[i]
+                    print "Usuario: " + u[0] + "   Contraseña: " \
+                        + vdiccionario[i]
                     sys.exit()
             print ""
             print "Contraseña no encontrada :("
@@ -71,11 +90,12 @@ def main():
         print "Uso python <fichero shadow> <diccionario>"
         print
         sys.exit()
+    p = 5
+    parteDiccionario(sys.argv[2], int(p))
+    #usuarios = leeSombra(sombra)
+    #palabras = leeDic(diccionario)
 
-    usuarios = leeSombra(sombra)
-    palabras = leeDic(diccionario)
-
-    crackUsuarios(usuarios, palabras)
+    #crackUsuarios(usuarios, palabras)
 
 
 if __name__ == "__main__":
